@@ -1,4 +1,4 @@
-"""One command from ticker to validated chunks.
+"""One command from ticker to validated chunks and financial marts.
 
     uv run accession TSLA AAPL
     uv run accession NVDA --since 2024-01-01 --forms 10-K
@@ -10,6 +10,9 @@ For each ticker:
   3. for each 10-K/10-Q (and amendments) filed since `--since`:
      download -> parse XBRL instance -> sections -> chunks -> validate
   4. record the outcome in a per-company manifest
+then, once for all tickers:
+  5. build the dbt project (fiscal calendar, fact versions, fct_financials,
+     fct_chunks) and run its data tests; skip with --no-transform
 
 Filings already processed by the current parser version are skipped, and
 archive documents are cached, so re-running only does new work. One bad
@@ -22,10 +25,12 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 import traceback
 from collections import Counter
 from datetime import UTC, date, datetime
+from pathlib import Path
 from typing import Any
 
 import pyarrow as pa
@@ -54,6 +59,7 @@ from accession.ingest.validate import Issue, status_of, validate_filing
 from accession.storage import LocalStore, ObjectStore
 
 DEFAULT_SINCE = date(2023, 1, 1)
+DBT_PROJECT = Path(__file__).resolve().parents[1] / "dbt"
 
 
 def manifest_key(cik: str) -> str:
@@ -232,6 +238,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_false",
         help="use cached filing history and company facts (offline)",
     )
+    parser.add_argument(
+        "--no-transform",
+        dest="transform",
+        action="store_false",
+        help="skip the dbt build (models + tests) after ingesting",
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="log every SEC request")
     args = parser.parse_args(argv)
 
@@ -261,8 +273,29 @@ def main(argv: list[str] | None = None) -> int:
             )
 
     summary = ", ".join(f"{totals[k]} {k}" for k in ("ok", "warning", "failed", "skipped"))
-    print(f"\nDone: {summary}")
-    return 1 if totals["failed"] else 0
+    print(f"\nIngest: {summary}")
+
+    transform_ok = run_transforms(settings.data_dir) if args.transform else True
+    return 1 if totals["failed"] or not transform_ok else 0
+
+
+def run_transforms(data_dir: Path) -> bool:
+    """Build the dbt project (staging -> intermediate -> marts) and run its tests."""
+    from dbt.cli.main import dbtRunner  # imported lazily: dbt is slow to import
+
+    os.environ["DATA_DIR"] = str(data_dir.resolve())
+    result = dbtRunner().invoke(
+        ["build", "--project-dir", str(DBT_PROJECT), "--profiles-dir", str(DBT_PROJECT), "--quiet"]
+    )
+    # dbt reports "success" for built models/seeds and "pass"/"warn"/"fail" for tests.
+    labels = {"success": "models built", "pass": "tests passed", "warn": "test warnings"}
+    statuses: Counter[str] = Counter(str(r.status) for r in getattr(result.result, "results", []))
+    print(
+        "Transform: "
+        + ", ".join(f"{n} {labels.get(status, status)}" for status, n in sorted(statuses.items()))
+        + ("" if result.success else "  (see dbt output above)")
+    )
+    return bool(result.success)
 
 
 if __name__ == "__main__":

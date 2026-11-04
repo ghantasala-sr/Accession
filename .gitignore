@@ -8,3 +8,8 @@ __pycache__/
 data/
 *-sa-key.json
 .DS_Store
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+dbt/.user.yml
+logs/

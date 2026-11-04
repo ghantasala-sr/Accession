@@ -1,0 +1,9 @@
+accession:
+  target: local
+  outputs:
+    # Local: DuckDB reads the Parquet/JSON under data/ directly.
+    # An Athena target (dbt-athena over the S3 bucket) is added in Phase 7.
+    local:
+      type: duckdb
+      path: "{{ env_var('DATA_DIR', 'data') }}/accession.duckdb"
+      threads: 4

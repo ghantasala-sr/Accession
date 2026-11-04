@@ -1,0 +1,81 @@
+version: 2
+
+models:
+  - name: stg_companies
+    columns:
+      - name: cik
+        data_tests: [unique, not_null]
+      - name: ticker
+        data_tests: [unique, not_null]
+
+  - name: stg_filings
+    columns:
+      - name: accession_number
+        data_tests: [unique, not_null]
+      - name: form_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["10-K", "10-Q", "10-K/A", "10-Q/A"]
+
+  - name: int_fiscal_periods
+    description: One row per company fiscal quarter, with true start and end dates.
+    data_tests:
+      - dbt_utils_unique_combination:
+          arguments:
+            columns: [cik, period_end]
+      - dbt_utils_unique_combination:
+          arguments:
+            columns: [cik, fiscal_year, fiscal_quarter]
+    columns:
+      - name: fiscal_quarter
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4]
+
+  - name: int_quarterly_values
+    data_tests:
+      - dbt_utils_unique_combination:
+          arguments:
+            columns: [basis, cik, taxonomy, tag, unit, fiscal_year, fiscal_quarter]
+    columns:
+      - name: derivation
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [reported, ytd_difference, annual_minus_nine_months]
+
+  - name: dim_filings
+    columns:
+      - name: accession_number
+        data_tests: [unique, not_null]
+
+  - name: fct_financials
+    description: Core metrics per company and fiscal period, from XBRL.
+    data_tests:
+      - dbt_utils_unique_combination:
+          arguments:
+            columns: [basis, cik, metric, fiscal_year, fiscal_period]
+    columns:
+      - name: value
+        data_tests: [not_null]
+      - name: source_accession
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_filings')
+                field: accession_number
+
+  - name: fct_chunks
+    columns:
+      - name: chunk_id
+        data_tests: [unique, not_null]
+      - name: accession_number
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_filings')
+                field: accession_number

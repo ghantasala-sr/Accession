@@ -1,0 +1,26 @@
+name: accession
+version: "0.1.0"
+config-version: 2
+profile: accession
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+
+vars:
+  # Root of the object store (local stand-in for the S3 bucket). `uv run
+  # accession` sets DATA_DIR from .env; run by hand, dbt resolves the default
+  # relative to the current directory (the repo root).
+  data_dir: "{{ env_var('DATA_DIR', 'data') }}"
+  # Forms whose XBRL facts count as reported financials.
+  periodic_forms: ["10-K", "10-Q", "10-K/A", "10-Q/A"]
+
+models:
+  accession:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: table
+    marts:
+      +materialized: table
