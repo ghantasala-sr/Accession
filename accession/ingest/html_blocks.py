@@ -30,6 +30,7 @@ _WHITESPACE = re.compile(r"\s+")
 _NUMBER = re.compile(r"\d")
 _PAGE_ARTIFACT = re.compile(r"^(table of contents|page \d+|\d{1,3})$", re.IGNORECASE)
 _TOC_ITEM = re.compile(r"^item\s+\d", re.IGNORECASE)
+_HEADING_CELL = re.compile(r"^(item\s+\d{1,2}\s*[A-C]?|part\s+(IV|III|II|I))\.?$", re.IGNORECASE)
 _BOLD_STYLE = re.compile(r"font-weight\s*:\s*(bold|[6-9]00)", re.IGNORECASE)
 _SCALE_UNITS = {"0": "units", "3": "thousands", "6": "millions", "9": "billions"}
 
@@ -179,6 +180,13 @@ def _table_blocks(table: Tag) -> list[Block]:
         return []
     if _is_toc(rows):
         return []
+
+    # Some filers (Amazon) lay out each heading as a one-row table:
+    # | Item 2. | Management's Discussion and Analysis ... |. Structurally it is
+    # a heading, so it is emitted as one, flagged like a bold heading line.
+    cells = [cell for cell in rows[0] if cell]
+    if len(rows) == 1 and len(cells) <= 2 and _HEADING_CELL.match(cells[0]):
+        return [Block(kind="text", text=" ".join(cells), is_bold=True)]
 
     # Layout tables (one meaningful column of prose) are really paragraphs.
     if all(sum(1 for cell in row if cell) <= 1 for row in rows) and not _looks_numeric(rows):

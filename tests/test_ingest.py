@@ -160,3 +160,17 @@ def test_process_filing_rows_carry_lineage() -> None:
     assert (chunk["fiscal_year_focus"], chunk["fiscal_period_focus"]) == ("2026", "Q3")
     assert chunk["embed_text"].startswith("Tesla, Inc. (TSLA) 10-Q for the period ended")
     assert sections_table.num_rows == len(sections())
+
+
+def test_one_row_heading_tables_become_headings() -> None:
+    # Amazon lays out each Item heading as a single-row table.
+    html = b"""<html><body>
+    <table><tr><td>PART I. FINANCIAL INFORMATION</td></tr></table>
+    <table><tr><td>Item 1.</td><td>Financial Statements</td></tr></table>
+    <div>Statements here.</div>
+    <table><tr><td>Item 2.</td><td>Management's Discussion and Analysis</td></tr></table>
+    <div>Net sales increased.</div>
+    </body></html>"""
+    _, blocks = parse_html(html)
+    keys = {s.key: s.kind for s in split_sections(blocks, "10-Q")}
+    assert keys == {"part1_item1": "financial_statements", "part1_item2": "mda"}

@@ -13,6 +13,9 @@ dependencies = [
     "structlog>=24.1",
 ]
 
+[project.scripts]
+accession = "accession.run:main"
+
 [dependency-groups]
 dev = [
     "mypy>=1.11",

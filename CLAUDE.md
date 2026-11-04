@@ -305,7 +305,7 @@ docker compose up -d          # Postgres + pgvector
 uv sync
 uv run alembic upgrade head
 uv run pytest
-uv run python -m accession.edgar.fetch --tickers AAPL AMZN GOOGL MSFT NVDA TSLA
+uv run accession AAPL AMZN GOOGL MSFT NVDA TSLA   # fetch, parse, chunk, validate
 uv run uvicorn accession.api.main:app --reload
 cd frontend && npm install && npm run dev
 ```
